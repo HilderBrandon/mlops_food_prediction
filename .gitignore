@@ -1,4 +1,35 @@
+# Data and generated model artifacts
 data/
 models/
+
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Jupyter
 .ipynb_checkpoints/
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# macOS and editor files
+.DS_Store
+.vscode/
+.idea/
