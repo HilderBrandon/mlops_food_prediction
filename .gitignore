@@ -1,6 +1,10 @@
-# Data and generated model artifacts
-data/
-models/
+# Data and generated model artifacts (se mantienen los __init__.py de cada carpeta)
+data/raw/*
+data/processed/*
+models/*
+!data/raw/__init__.py
+!data/processed/__init__.py
+!models/__init__.py
 
 # Python
 __pycache__/
@@ -20,9 +24,12 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# MLflow
+# MLflow y Prefect (estado local de los servicios)
 mlruns/
 mlartifacts/
+mlflow.db
+mlflow_store/
+prefect_store/
 
 # Secrets and local configuration
 .env
