@@ -74,6 +74,8 @@ cd ..
 - MLflow: http://localhost:5000
 - Prefect: http://localhost:4200
 
+> **macOS:** el puerto 5000 lo ocupa el Receptor AirPlay. Desactívalo en Ajustes del Sistema → General → AirDrop y Handoff → Receptor AirPlay, o MLflow no podrá arrancar.
+
 Si Docker no funciona, usa la opción B de [services/README.md](services/README.md).
 
 ## 4. Validar los servicios con el flow de prueba

@@ -13,6 +13,7 @@ data:
     - Monthly Income
     - Educational Qualifications
     - Family size
+    - Customer Type
     - latitude
     - longitude
     - Pin code

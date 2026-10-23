@@ -46,6 +46,10 @@ def load_data(path: str | Path | None = None, config: dict | None = None) -> pd.
         logger.info("Eliminando columnas sin nombre: %s", unnamed)
         df = df.drop(columns=unnamed)
 
+    # Quita espacios sobrantes en los textos (p. ej. "Negative " en Feedback).
+    text_cols = df.select_dtypes(include=["object", "string"]).columns
+    df[text_cols] = df[text_cols].apply(lambda col: col.str.strip())
+
     target = data_cfg["target"]
     if target not in df.columns:
         raise ValueError(f"Falta la columna objetivo '{target}'. Columnas: {list(df.columns)}")
