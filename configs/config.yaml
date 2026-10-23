@@ -1,0 +1,28 @@
+# Configuración del caso de uso: Online Food Ordering (Kaggle srisyra02/online-food-ordering-dataset)
+data:
+  # El CSV no se versiona (data/ está en .gitignore). Ver README para descargarlo.
+  raw_path: "data/raw/online food delivery dataset.csv"
+  target: "Output"
+  # Columnas que se espera encontrar. Si falta "target" el cargue falla;
+  # si falta alguna de estas solo se avisa en los logs.
+  expected_columns:
+    - Age
+    - Gender
+    - Marital Status
+    - Occupation
+    - Monthly Income
+    - Educational Qualifications
+    - Family size
+    - latitude
+    - longitude
+    - Pin code
+    - Output
+    - Feedback
+
+train:
+  test_size: 0.2
+  random_state: 42
+  n_estimators: 100
+
+mlflow:
+  experiment: "food-prediction"
