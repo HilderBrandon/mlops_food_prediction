@@ -42,7 +42,7 @@ Cada carpeta lleva un `__init__.py` para que Git la versione aunque esté vacía
 ```powershell
 git clone https://github.com/HilderBrandon/mlops_food_prediction.git
 cd mlops_food_prediction
-poetry env use 3.12
+poetry env use 3.12   # o 3.13 / 3.14, la que tengas instalada
 poetry install
 poetry run python -c "import prefect, mlflow, sklearn; print('ok')"
 ```
