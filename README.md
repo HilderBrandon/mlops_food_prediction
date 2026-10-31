@@ -47,15 +47,15 @@ poetry install
 poetry run python -c "import prefect, mlflow, sklearn; print('ok')"
 ```
 
-`pyproject.toml` declara lo que se necesita y `poetry.lock` registra lo que se instaló. Si cambias dependencias usa `poetry add "paquete==x.y.z"` y sube ambos archivos. Si Poetry avisa de que el lock no coincide, `poetry lock` lo ejecuta solo quien cambió las dependencias.
+`pyproject.toml` declara lo que se necesita y `poetry.lock` registra lo que se instaló. Si se cambian dependencias, se usa `poetry add "paquete==x.y.z"` y se suben ambos archivos. Si Poetry avisa de que el lock no coincide, `poetry lock` lo ejecuta solo quien cambió las dependencias.
 
 > `fastapi` está fijado en 0.154.0 porque las versiones más nuevas rompen el servidor de Prefect 3.8.8 cuando se ejecuta sin Docker.
 
 ## 2. Datos
 
-1. Descarga el CSV desde [Kaggle](https://www.kaggle.com/datasets/srisyra02/online-food-ordering-dataset).
-2. Guárdalo como `data/raw/online food delivery dataset.csv` (388 filas).
-3. Comprueba el cargue:
+1. Se descarga el CSV desde [Kaggle](https://www.kaggle.com/datasets/srisyra02/online-food-ordering-dataset).
+2. Se guarda como `data/raw/online food delivery dataset.csv` (388 filas).
+3. Se comprueba el cargue:
 
 ```powershell
 poetry run python src/load_data.py
@@ -74,9 +74,9 @@ cd ..
 - MLflow: http://localhost:5000
 - Prefect: http://localhost:4200
 
-> **macOS:** el puerto 5000 lo ocupa el Receptor AirPlay. Desactívalo en Ajustes del Sistema → General → AirDrop y Handoff → Receptor AirPlay, o MLflow no podrá arrancar.
+> **macOS:** el puerto 5000 lo ocupa el Receptor AirPlay. Se desactiva en Ajustes del Sistema → General → AirDrop y Handoff → Receptor AirPlay, o MLflow no podrá arrancar.
 
-Si Docker no funciona, usa la opción B de [services/README.md](services/README.md).
+Si Docker no funciona, se usa la opción B de [services/README.md](services/README.md).
 
 ## 4. Validar los servicios con el flow de prueba
 
@@ -95,6 +95,12 @@ Resultado esperado:
 - En http://localhost:4200/runs, el run del flow **prueba** queda en *Completed* y en sus logs aparece `Suma de 1 a 5 = 15`.
 - En http://localhost:5000, el experimento **prueba-validacion** tiene un run **prueba-mlflow** con el parámetro `n` y la métrica `suma`.
 
+Capturas de la ejecución:
+
+| Prefect: flow *prueba* completado | MLflow: run *prueba-mlflow* |
+|---|---|
+| ![Flow prueba en Prefect](docs/img/prefect-flow-prueba.png) | ![Run prueba-mlflow en MLflow](docs/img/mlflow-run-prueba.png) |
+
 ## 5. Pipeline de entrenamiento (opcional)
 
 Con las mismas variables de entorno y el CSV en `data/raw/`:
@@ -104,6 +110,33 @@ poetry run python flows/food_flow.py
 ```
 
 El flow **food-prediction** tiene tres tareas: cargar datos (registra filas y columnas en los logs y en MLflow), entrenar un RandomForest y registrar parámetros, métricas (accuracy, recall, f1, AUC) y modelo en el experimento `food-prediction` de MLflow, y crear en Prefect un artefacto Markdown con el resumen.
+
+## 6. Resultados
+
+Ejecución del flow **food-prediction** (dataset de 388 filas x 13 columnas) registrada en MLflow:
+
+| Métrica | Valor |
+|---|---|
+| accuracy | 0.9359 |
+| recall | 0.9836 |
+| f1 | 0.9600 |
+| AUC | 0.9257 |
+
+Flow **food-prediction** en Prefect, con sus tres tareas (`cargar_datos-156`, `entrenar-28a` y `resumen-c12`):
+
+![Flow food-prediction en Prefect](docs/img/prefect-flow-food-prediction.png)
+
+Logs de la ejecución, con el dataset cargado y las métricas registradas:
+
+![Logs de food-prediction en Prefect](docs/img/prefect-logs-food-prediction.png)
+
+Runs del experimento **prueba-validacion** en MLflow:
+
+![Lista de runs en MLflow](docs/img/mlflow-evaluation-runs.png)
+
+Panel de Prefect con las ejecuciones de los dos flows:
+
+![Dashboard de Prefect](docs/img/prefect-dashboard.png)
 
 ## Pruebas
 
