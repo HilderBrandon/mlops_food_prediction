@@ -40,3 +40,6 @@ prefect_store/
 .DS_Store
 .vscode/
 .idea/
+
+# Predicciones diarias de la pipeline de inferencia
+data/predictions/

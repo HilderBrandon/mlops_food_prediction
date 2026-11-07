@@ -1,0 +1,35 @@
+# Variables del experimento. Cambia `seleccion` para elegir el conjunto:
+#   ALL     -> todas las variables, numéricas y categóricas
+#   NUMERIC -> solo las numéricas
+#   CUSTOM  -> solo las que aparecen en `custom` (nombres exactos del CSV)
+# Cada run registra en MLflow el alias (`features`) y el número de variables (`n_features`).
+
+seleccion: CUSTOM
+
+numericas:
+  - Age
+  - Family size
+  - latitude
+  - longitude
+  - Pin code
+
+categoricas:
+  - Gender
+  - Marital Status
+  - Occupation
+  - Monthly Income
+  - Educational Qualifications
+  - Customer Type
+  - Feedback
+
+# Ejemplo: sin las variables de ubicación (latitude, longitude, Pin code).
+custom:
+  - Age
+  - Family size
+  - Gender
+  - Marital Status
+  - Occupation
+  - Monthly Income
+  - Educational Qualifications
+  - Customer Type
+  - Feedback

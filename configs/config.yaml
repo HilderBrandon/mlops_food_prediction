@@ -1,8 +1,12 @@
 # Configuración del caso de uso: Online Food Ordering (Kaggle srisyra02/online-food-ordering-dataset)
+# Todo lo que puede cambiar (datos, modelos, umbrales, MLflow) vive aquí, no en el código.
+# Las rutas son relativas a la raíz del repositorio.
+
 data:
   # El CSV no se versiona (data/ está en .gitignore). Ver README para descargarlo.
   raw_path: "data/raw/online food delivery dataset.csv"
   target: "Output"
+  clase_positiva: "Yes"   # Output = Yes -> 1 (el cliente vuelve a pedir)
   # Columnas que se espera encontrar. Si falta "target" el cargue falla;
   # si falta alguna de estas solo se avisa en los logs.
   expected_columns:
@@ -20,10 +24,54 @@ data:
     - Output
     - Feedback
 
+# Hiperparámetros del flow opcional de la actividad 1 (flows/food_flow.py).
 train:
   test_size: 0.2
   random_state: 42
   n_estimators: 100
 
+# Actividad 2 ---------------------------------------------------------------
+
+division:
+  test_size: 0.25
+  random_state: 42        # también se registra como `semilla` en MLflow
+
+# Modelos que compara el flow de entrenamiento. Cada uno es un run de MLflow.
+# Solo el de mayor AUC puede pasar a champion.
+candidatos:
+  - nombre_run: food-logreg
+    tipo: logistic_regression
+    parametros:
+      C: 1.0
+      max_iter: 1000
+  - nombre_run: food-rf
+    tipo: random_forest
+    parametros:
+      n_estimators: 200
+      max_depth: 6
+      random_state: 42
+  - nombre_run: food-gbt
+    tipo: gradient_boosting
+    parametros:
+      n_estimators: 150
+      learning_rate: 0.05
+      max_depth: 3
+      random_state: 42
+
+metricas:
+  umbral: 0.5             # probabilidad a partir de la cual se predice Output = Yes
+
 mlflow:
-  experiment: "food-prediction"
+  # MLFLOW_TRACKING_URI, si está definida, tiene prioridad sobre este valor.
+  tracking_uri: http://localhost:5000
+  experimento: food-prediction-mlops
+
+registro:
+  nombre_modelo: food-modelo   # nombre en el Model Registry de MLflow
+  umbral_auc: 0.80             # AUC mínimo para ser champion
+  mejora_minima: 0.0           # además debe superar al champion por al menos esto
+
+inferencia:
+  tamano_lote: 50              # clientes que se puntúan en cada ejecución diaria
+  carpeta_salida: data/predictions
+  cron: "0 6 * * *"            # todos los días a las 06:00 (hora UTC)
