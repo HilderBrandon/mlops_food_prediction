@@ -15,24 +15,33 @@ Proyecto del curso de **MLOps** de la **Maestría en Ciencia de Datos (Universid
 
 ```text
 mlops_food_prediction/
-├── configs/config.yaml      # Rutas, columnas esperadas e hiperparámetros
+├── api/main.py                  # API de FastAPI que sirve el modelo champion (A2)
+├── configs/
+│   ├── config.yaml              # Datos, candidatos, umbrales, MLflow, registro e inferencia
+│   └── features.yaml            # Variables del experimento: ALL, NUMERIC o CUSTOM (A2)
 ├── data/
-│   ├── raw/                 # CSV de Kaggle (no se versiona)
-│   └── processed/           # Datos transformados (no se versiona)
+│   ├── raw/                     # CSV de Kaggle (no se versiona)
+│   ├── processed/               # Datos transformados (no se versiona)
+│   └── predictions/             # Predicciones diarias prediccion_<fecha>.csv (no se versiona)
+├── docs/memoria-actividad-2.md  # Borrador de la memoria 2
 ├── flows/
-│   ├── prueba_flow.py       # Flow de validación de Prefect + MLflow
-│   └── food_flow.py         # Pipeline de entrenamiento del proyecto (opcional A1)
-├── models/                  # Modelos locales (no se versiona)
-├── notebooks/01_eda.ipynb   # Análisis exploratorio
-├── services/                # docker compose de MLflow (5000) y Prefect (4200)
+│   ├── prueba_flow.py           # Flow de validación de Prefect + MLflow (A1)
+│   ├── food_flow.py             # Pipeline opcional de la A1
+│   ├── entrenamiento_flow.py    # Pipeline de entrenamiento (A2)
+│   ├── inferencia_flow.py       # Pipeline de inferencia diaria (A2)
+│   └── desplegar.py             # Despliegues en Prefect (A2)
+├── models/                      # Modelos locales (no se versiona)
+├── notebooks/01_eda.ipynb       # Análisis exploratorio
+├── services/                    # docker compose de MLflow (5000) y Prefect (4200)
 ├── src/
-│   ├── load_data.py         # Cargue y validación del dataset
+│   ├── load_data.py             # Cargue y validación del dataset
+│   ├── modelo.py                # Variables, pipeline de sklearn, métricas y regla de promoción (A2)
 │   ├── preprocessing.py
 │   ├── train.py
 │   └── evaluate.py
-├── tests/                   # Pruebas con pytest
-├── pyproject.toml           # Dependencias declaradas (versiones fijadas)
-└── poetry.lock              # Versiones exactas instaladas (no editar a mano)
+├── tests/                       # Pruebas con pytest
+├── pyproject.toml
+└── poetry.lock
 ```
 
 Cada carpeta lleva un `__init__.py` para que Git la versione aunque esté vacía.
@@ -137,6 +146,79 @@ Runs del experimento **prueba-validacion** en MLflow:
 Panel de Prefect con las ejecuciones de los dos flows:
 
 ![Dashboard de Prefect](docs/img/prefect-dashboard.png)
+
+## 7. Actividad 2: pipelines, registro y API
+
+Define las variables en cada terminal (en macOS, si MLflow está publicado en otro puerto por AirPlay, usa ese puerto, p. ej. `http://localhost:5001`):
+
+```powershell
+$env:PREFECT_API_URL = "http://localhost:4200/api"
+$env:MLFLOW_TRACKING_URI = "http://localhost:5000"
+```
+
+`MLFLOW_TRACKING_URI` tiene prioridad sobre `mlflow.tracking_uri` de `configs/config.yaml`.
+
+### 7.1 Entrenamiento
+
+```powershell
+poetry run python flows/entrenamiento_flow.py
+```
+
+Flow `entrenamiento-food`: **ingesta → división → entrenamiento → evaluación → registro**.
+
+- Entrena cada modelo de `candidatos` (regresión logística, random forest y gradient boosting) con las variables de `configs/features.yaml`.
+- Cada candidato es un run en el experimento `food-prediction-mlops` con el tag `fase = entrenamiento`, sus parámetros (incluidos `features` y `n_features`), las métricas `auc`, `accuracy`, `precision`, `recall`, `f1` y el modelo.
+- El mejor candidato solo se registra como versión nueva de `food-modelo` y recibe el alias `champion` si su AUC ≥ `registro.umbral_auc` **y** supera al champion actual en más de `registro.mejora_minima`. Si no, el run queda en MLflow y el alias no cambia.
+
+Para cambiar las variables edita `seleccion` en `configs/features.yaml` (`ALL`, `NUMERIC` o `CUSTOM`).
+
+### 7.2 Inferencia
+
+```powershell
+poetry run python flows/inferencia_flow.py
+```
+
+Flow `inferencia-food`: carga `models:/food-modelo@champion`, toma un lote aleatorio de `inferencia.tamano_lote` clientes, guarda `data/predictions/prediccion_<fecha>.csv` y crea un run con tag `fase = inferencia`, `modelo_version` y `modelo_run_id`.
+
+### 7.3 Despliegues en Prefect
+
+```powershell
+poetry run python flows/desplegar.py
+```
+
+Registra `entrenamiento-food/entrenamiento-manual` (sin horario) e `inferencia-food/inferencia-diaria` (cron `0 6 * * *`, UTC). Deja la terminal abierta. Para lanzarlos a mano:
+
+```powershell
+poetry run prefect deployment run "entrenamiento-food/entrenamiento-manual"
+poetry run prefect deployment run "inferencia-food/inferencia-diaria"
+```
+
+### 7.4 API
+
+```powershell
+poetry run uvicorn api.main:app --port 8000
+```
+
+- Docs: http://localhost:8000/docs · Estado: http://localhost:8000/health
+- Si cambia el champion, reinicia la API.
+
+Ejemplo (PowerShell):
+
+```powershell
+$cliente = @{
+    Age = 22; Gender = "Female"; "Marital Status" = "Single"; Occupation = "Student"
+    "Monthly Income" = "No Income"; "Educational Qualifications" = "Graduate"; "Family size" = 4
+    "Customer Type" = "Frequent"; latitude = 12.9766; longitude = 77.5993; "Pin code" = 560001
+    Feedback = "Positive"
+} | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:8000/predict -Method Post -ContentType "application/json" -Body $cliente
+```
+
+Respuesta obtenida con el champion versión 2:
+
+```json
+{"probabilidad_output": 0.9807, "prediccion": 1, "vuelve_a_pedir": "Yes", "version_modelo": "2"}
+```
 
 ## Pruebas
 
