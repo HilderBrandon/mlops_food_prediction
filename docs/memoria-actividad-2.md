@@ -1,8 +1,6 @@
 # Memoria 2: Pipeline y empaquetado
 
-**Proyecto:** Online Food Ordering Behavior Prediction · **Repositorio:** https://github.com/HilderBrandon/mlops_food_prediction
-
-> Borrador. Completar las secciones marcadas con ✏️ (capturas, contribución individual y uso de IA).
+**Proyecto:** Online Food Ordering Behavior Prediction · **Integrantes:** Brandon Galvis, Johan Sebastian Cuellar · **Repositorio:** https://github.com/HilderBrandon/mlops_food_prediction
 
 ## 1. Objetivo
 
@@ -98,19 +96,48 @@ Un cliente casado, empleado, con ingresos altos y feedback negativo obtuvo 0,192
 
 ## 6. Problemas encontrados
 
-- **Puerto 5000 en macOS** ocupado por el Receptor AirPlay: MLflow quedó publicado en 5001 y se usó `MLFLOW_TRACKING_URI=http://localhost:5001` (tiene prioridad sobre el YAML).
-- **Modelos de árboles y skops:** MLflow rechaza por defecto el tipo `sklearn.tree._tree.Tree`; se añadió `skops_trusted_types` al registrar.
-- **Aviso de esquema con enteros** al inferir la firma del modelo: es informativo; el dataset no tiene nulos.
-- **Al cerrar `desplegar.py`** Prefect pausa los despliegues; vuelven a activarse al lanzarlo de nuevo.
-- ✏️ Añadir los problemas que haya tenido el grupo.
+| Problema | Causa | Solución |
+|---|---|---|
+| La API no arrancaba: `MlflowException ... failed with error code 403` al cargar `models:/food-modelo@champion` | En esa terminal no estaba definida `MLFLOW_TRACKING_URI`, así que se usó `http://localhost:5000` de `config.yaml`. En macOS ese puerto lo ocupa el Receptor AirPlay (respondía `AirTunes`), no MLflow. | MLflow se publica en el puerto 5001 y se define `MLFLOW_TRACKING_URI=http://localhost:5001` en cada terminal (se añadió a `~/.zshrc`). No se cambió el YAML para no romper la configuración del resto del curso, que usa el 5000. |
+| `zsh: command not found: poetry` | Poetry estaba instalado en `~/Library/Python/3.14/bin`, que no estaba en el `PATH`. | Se añadió esa carpeta al `PATH` en `~/.zshrc`. El entorno virtual y sus dependencias ya existían. |
+| `git pull` abortaba: "los cambios locales de README.md serán sobrescritos" | En GitHub había commits nuevos de la actividad 1 (capturas y sección de resultados) que también modificaban el `README.md`. | `git stash -u`, `git pull`, `git stash pop` y resolución manual del conflicto conservando las dos secciones (resultados de la A1 y la nueva sección 7 de la A2). |
+| `MlflowException: The saved sklearn model references untrusted types` al registrar random forest y gradient boosting | MLflow 3 serializa con skops y no confía por defecto en `sklearn.tree._tree.Tree`. | Se pasa `skops_trusted_types=["sklearn.tree._tree.Tree"]` en `log_model`, porque son modelos entrenados por el propio pipeline. |
+| Al cerrar la terminal de `desplegar.py` los despliegues quedan pausados | `serve()` ejecuta los despliegues dentro de ese proceso. | La terminal debe quedar abierta. Con más tiempo se usaría un work pool con un worker. |
+| Aviso de MLflow sobre columnas enteras al inferir la firma | Las columnas enteras no admiten nulos en el esquema. | Es solo informativo: el dataset no tiene nulos. |
 
 ## 7. Conclusiones
 
 La separación en `src/` (lógica), `flows/` (orquestación), `configs/` (parámetros) y `api/` (servicio) permite cambiar modelos, variables y umbrales sin tocar código, y el alias `champion` desacopla el entrenamiento del consumo. Con más tiempo: validación cruzada en vez de un único split (el test es pequeño), recarga del champion en la API sin reiniciar, ingesta de datos realmente nuevos, monitoreo de drift (actividad siguiente) y un worker/work pool en lugar de `serve` para no depender de una terminal abierta.
 
-## 8. Uso de herramientas de IA ✏️
+## 8. Uso de herramientas de IA
 
-- Herramientas: Claude Code (asistente de programación) para generar la estructura de flows, API, pruebas y este borrador a partir del enunciado y el ejemplo de referencia.
-- ✏️ Qué se hizo sin IA (p. ej. EDA, elección del dataset, revisión de resultados).
-- ✏️ Qué salidas de la IA se revisaron, corrigieron o descartaron y por qué.
-- ✏️ Contribución individual de cada integrante.
+**Herramienta:** Claude Code (asistente de programación de Anthropic) en la app de escritorio de Claude.
+
+**Para qué se usó:**
+
+- Leer el enunciado y el ejemplo de referencia del curso (`actividades/actividad-2/`) y adaptarlos al caso de pedidos de comida, sin copiar el ejemplo de churn.
+- Escribir el código: `src/modelo.py`, los flows de entrenamiento, inferencia y despliegue, la API, `features.yaml`, las pruebas en `tests/test_modelo.py` y la sección de la actividad 2 del README.
+- Ejecutar una primera prueba de extremo a extremo contra los servicios locales y redactar el borrador de esta memoria con las métricas obtenidas.
+- Diagnosticar errores durante la ejecución: el error 403 del puerto 5000, `poetry` fuera del `PATH` y el conflicto de Git en el `README.md`.
+
+**Qué se hizo sin IA:**
+
+- La elección del dataset y del caso de uso (Online Food Ordering de Kaggle), que viene de la actividad 1.
+- La ejecución de los flows, los despliegues y la API en el equipo propio, la toma de las capturas de la sección 4 y la gestión del repositorio: ramas, commits, push y Pull Requests en GitHub, hechos a mano siguiendo instrucciones paso a paso.
+- La revisión de los resultados: comprobar en las UIs de MLflow y Prefect que los runs, el alias `champion` y los despliegues eran los esperados, y validar las métricas y la elección de `CUSTOM` como conjunto de variables del champion.
+
+**Qué se revisó o corrigió de las salidas de la IA:**
+
+- Se comprobó en MLflow que solo los modelos promovidos (v1 y v2) quedaran en el Model Registry y que el run con NUMERIC no cambiara el alias, como pide la actividad.
+- Se verificó que la API respondiera con la versión 2 después de cambiar el champion, sin modificar código.
+- Se descartó la propuesta de cambiar `tracking_uri` a `5001` en `config.yaml`: el problema era solo de este equipo con macOS, así que se resolvió con la variable de entorno.
+- Se corrigió el orden de las capturas al enlazarlas en la memoria (runs de MLflow frente a Model Registry).
+
+**Contribución individual:**
+
+| Integrante | Contribución |
+|---|---|
+| Brandon Galvis | Definió el caso de uso. Guio el desarrollo con Claude Code. Ejecutó y validó los flows, los despliegues y la API en su equipo. Tomó las capturas y gestionó el repositorio (ramas, commits y Pull Requests). |
+| Johan Sebastian Cuellar | Revisó los detalles de la implementación y de esta memoria, y se encarga de la entrega final. |
+
+La IA generó el código y el borrador de la memoria. El grupo ejecutó, validó y revisó el resultado.
