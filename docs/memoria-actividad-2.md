@@ -34,14 +34,23 @@ api/main.py · configs/{config,features}.yaml · flows/{entrenamiento,inferencia
 | División estratificada, `test_size` 0,25 | 0,2 sin estratificar | Con pocos negativos, estratificar garantiza que el test tenga ambas clases (97 filas, ~22 negativos). |
 | `cache_policy=NO_CACHE` en las tasks | Caché por defecto de Prefect | Las entradas son DataFrames y modelos; no tiene sentido cachearlos y evita avisos de hashing. |
 
-## 4. Evidencias ✏️
+## 4. Evidencias
 
-Añadir capturas de:
+**MLflow, experimento `food-prediction-mlops`.** Los 9 runs de entrenamiento (3 candidatos × ALL, NUMERIC y CUSTOM) tienen el tag `fase = entrenamiento`, y el run `inferencia-2026-11-07` tiene `fase = inferencia`. En la columna *Models* se ve que solo `food-rf-all` (v1) y `food-rf-custom` (v2) llegaron al registro.
 
-- MLflow, experimento `food-prediction-mlops`: los 9 runs de entrenamiento (3 candidatos × ALL/NUMERIC/CUSTOM) con tag `fase = entrenamiento`, y el run `inferencia-<fecha>`.
-- MLflow, Model Registry: `food-modelo` con versiones 1 y 2 y el alias `champion` en la versión 2.
-- Prefect: flow runs de `entrenamiento-food` e `inferencia-food`, y la página *Deployments* con los dos despliegues y el horario diario.
-- Swagger de la API (`/docs`) con la predicción de ejemplo.
+![Runs del experimento food-prediction-mlops](img/a2-mlflow-runs.png)
+
+**MLflow, Model Registry.** `food-modelo` tiene dos versiones con el tag `estado = aprobado`, y el alias `champion` apunta a la versión 2.
+
+![Model Registry con alias champion en la versión 2](img/a2-mlflow-registry-champion.png)
+
+**Prefect, despliegues.** `entrenamiento-manual` (flow `entrenamiento-food`) no tiene horario e `inferencia-diaria` (flow `inferencia-food`) se ejecuta *At 06:00 AM every day*. Los dos están en estado *Ready*.
+
+![Despliegues en Prefect](img/a2-prefect-deployments.png)
+
+**API.** Llamada a `POST /predict` desde Swagger (`/docs`). La respuesta es 200 y el modelo usado es la versión 2.
+
+![Predicción de ejemplo en la API](img/a2-api-predict.png)
 
 ## 5. Resultados
 
