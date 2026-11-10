@@ -164,13 +164,47 @@ $env:MLFLOW_TRACKING_URI = "http://localhost:5000"
 poetry run python flows/entrenamiento_flow.py
 ```
 
-Flow `entrenamiento-food`: **ingesta → división → entrenamiento → evaluación → registro**.
+Flow `entrenamiento-food`: **ingesta → división → entrenamiento → evaluación → registro**. Entrenamiento y evaluación se hacen por candidato, como tareas separadas de Prefect que corren en paralelo:
 
-- Entrena cada modelo de `candidatos` (regresión logística, random forest y gradient boosting) con las variables de `configs/features.yaml`.
+```mermaid
+flowchart LR
+    I[ingesta] --> D[división]
+    D --> T1[entrenar<br/>logreg]
+    D --> T2[entrenar<br/>rf]
+    D --> T3[entrenar<br/>gbt]
+    D --> T4[entrenar<br/>svm]
+    T1 --> E1[evaluar<br/>logreg]
+    T2 --> E2[evaluar<br/>rf]
+    T3 --> E3[evaluar<br/>gbt]
+    T4 --> E4[evaluar<br/>svm]
+    D -.-> E1 & E2 & E3 & E4
+    E1 & E2 & E3 & E4 --> R[registro]
+```
+<img width="1316" height="398" alt="image" src="https://github.com/user-attachments/assets/9681edfe-72e5-4f25-9a7d-8443f29f4e45" />
+
+
+Grafo real en Prefect:
+
+![Grafo de entrenamiento-food en Prefect](docs/img/prefect-grafo-entrenamiento.png)
+
+- Entrena cada modelo de `candidatos` (regresión logística, random forest, gradient boosting y SVM) con las variables de `configs/features.yaml`. Cada candidato se evalúa en su propia tarea.
 - Cada candidato es un run en el experimento `food-prediction-mlops` con el tag `fase = entrenamiento`, sus parámetros (incluidos `features` y `n_features`), las métricas `auc`, `accuracy`, `precision`, `recall`, `f1` y el modelo.
 - El mejor candidato solo se registra como versión nueva de `food-modelo` y recibe el alias `champion` si su AUC ≥ `registro.umbral_auc` **y** supera al champion actual en más de `registro.mejora_minima`. Si no, el run queda en MLflow y el alias no cambia.
 
 Para cambiar las variables edita `seleccion` en `configs/features.yaml` (`ALL`, `NUMERIC` o `CUSTOM`).
+
+#### Última ejecución (variables `CUSTOM`, 9 variables)
+
+Ingesta de 388 filas × 13 columnas, con partición de 291 filas de train y 97 de test (77.32 % de positivos en test).
+
+| Candidato | Algoritmo | AUC | Accuracy | Precision | Recall | F1 |
+|---|---|---|---|---|---|---|
+| **food-rf** 🏆 | random_forest | **0.9194** | 0.9072 | 0.9125 | 0.9733 | 0.9419 |
+| food-svm | svm | 0.9055 | 0.8866 | 0.9103 | 0.9467 | 0.9281 |
+| food-gbt | gradient_boosting | 0.8952 | 0.8866 | 0.9103 | 0.9467 | 0.9281 |
+| food-logreg | logistic_regression | 0.8533 | 0.8969 | 0.9114 | 0.9600 | 0.9351 |
+
+El mejor candidato fue `food-rf` (AUC 0.9194). Como no había champion previo, se registró como **versión 1** con alias `champion`, al superar el umbral de 0.8.
 
 ### 7.2 Inferencia
 
