@@ -40,8 +40,13 @@ from src.modelo import (  # noqa: E402
     resolver_features,
 )
 
-# Los árboles de sklearn (random forest, gradient boosting) los entrenamos nosotros: se confía en ese tipo.
-SKOPS_TRUSTED = ["sklearn.tree._tree.Tree"]
+# Los modelos los entrenamos nosotros: se confía en los tipos internos de sklearn que usan
+# los árboles (random forest, gradient boosting) y la calibración del SVM.
+SKOPS_TRUSTED = [
+    "sklearn.tree._tree.Tree",
+    "sklearn.calibration._CalibratedClassifier",
+    "sklearn.calibration._SigmoidCalibration",
+]
 
 
 def configurar_mlflow(cfg: dict) -> None:
@@ -158,13 +163,20 @@ def entrenamiento_flow() -> str | None:
     print(f"Mejor candidato: {mejor['nombre']} (AUC {mejor['metricas']['auc']:.4f})")
     version = registrar(mejor, cfg)
 
+    columnas = ["auc", "accuracy", "precision", "recall", "f1"]
+    ranking = sorted(resultados, key=lambda r: r["metricas"]["auc"], reverse=True)
     filas = "\n".join(
-        f"| {r['nombre']} | {r['metricas']['auc']:.4f} | {r['metricas']['f1']:.4f} |" for r in resultados
+        f"| {i} | {'**' + r['nombre'] + '**' if r is mejor else r['nombre']} | "
+        + " | ".join(f"{r['metricas'][c]:.4f}" for c in columnas)
+        + f" | `{r['run_id'][:8]}` |"
+        for i, r in enumerate(ranking, 1)
     )
     create_markdown_artifact(
         key="entrenamiento-food-resumen",
         markdown=(
-            f"# Entrenamiento ({alias})\n\n| Candidato | AUC | F1 |\n|---|---|---|\n{filas}\n\n"
+            f"# Entrenamiento ({alias})\n\n"
+            f"| # | Candidato | {' | '.join(c.upper() for c in columnas)} | Run MLflow |\n"
+            f"|---|---|{'---|' * len(columnas)}---|\n{filas}\n\n"
             f"Mejor: **{mejor['nombre']}**. Nueva versión champion: **{version or 'ninguna'}**\n"
         ),
     )

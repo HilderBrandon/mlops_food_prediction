@@ -57,6 +57,13 @@ candidatos:
       learning_rate: 0.05
       max_depth: 3
       random_state: 42
+  - nombre_run: food-svm      # SVC calibrado (src/modelo.py) para tener probabilidades
+    tipo: svm
+    parametros:
+      C: 1.0
+      kernel: rbf
+      gamma: scale
+      random_state: 42
 
 metricas:
   umbral: 0.5             # probabilidad a partir de la cual se predice Output = Yes

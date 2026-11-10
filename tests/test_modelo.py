@@ -42,7 +42,7 @@ def test_debe_promover():
     assert not debe_promover(0.87, 0.86, 0.8, mejora_minima=0.02)[0]
 
 
-@pytest.mark.parametrize("tipo", ["logistic_regression", "random_forest", "gradient_boosting"])
+@pytest.mark.parametrize("tipo", ["logistic_regression", "random_forest", "gradient_boosting", "svm"])
 def test_construir_modelo_entrena(tipo):
     rng = np.random.default_rng(0)
     X = pd.DataFrame({

@@ -7,20 +7,29 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.svm import SVC
 
 ROOT = Path(__file__).resolve().parents[1]
 FEATURES_PATH = ROOT / "configs" / "features.yaml"
+
+
+def svm_calibrado(**parametros) -> CalibratedClassifierCV:
+    """SVC con probabilidades calibradas (sustituye a SVC(probability=True), obsoleto en sklearn 1.9)."""
+    return CalibratedClassifierCV(SVC(**parametros), ensemble=False)
+
 
 ESTIMADORES = {
     "logistic_regression": LogisticRegression,
     "random_forest": RandomForestClassifier,
     "gradient_boosting": GradientBoostingClassifier,
+    "svm": svm_calibrado,
 }
 
 
