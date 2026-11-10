@@ -65,7 +65,7 @@ def entrenar(df: pd.DataFrame, config: dict) -> dict:
     }
 
     mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
-    mlflow.set_experiment(config["mlflow"]["experiment"])
+    mlflow.set_experiment(config["mlflow"]["experimento"])
     with mlflow.start_run(run_name="random-forest") as run:
         mlflow.log_params({**tr, "n_filas": len(df), "n_columnas": df.shape[1]})
         mlflow.log_metrics(metricas)
