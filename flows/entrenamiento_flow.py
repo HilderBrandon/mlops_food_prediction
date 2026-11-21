@@ -27,9 +27,9 @@ from mlflow.tracking import MlflowClient
 from prefect import flow, task
 from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import NO_CACHE
-from sklearn.model_selection import train_test_split
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.datos import particionar, validar_datos  # noqa: E402
 from src.load_data import load_config, load_data  # noqa: E402
 from src.modelo import (  # noqa: E402
     calcular_metricas,
@@ -57,19 +57,20 @@ def configurar_mlflow(cfg: dict) -> None:
 @task(cache_policy=NO_CACHE)
 def ingesta(cfg: dict) -> pd.DataFrame:
     df = load_data(config=cfg)
-    print(f"Ingesta: {df.shape[0]} filas x {df.shape[1]} columnas")
+    problemas = validar_datos(df, cfg)
+    if problemas:
+        raise ValueError("Los datos no pasan la validación: " + "; ".join(problemas))
+    print(f"Ingesta: {df.shape[0]} filas x {df.shape[1]} columnas (validación OK)")
     return df
 
 
 @task(cache_policy=NO_CACHE)
 def dividir(df: pd.DataFrame, cfg: dict, variables: list[str]) -> tuple:
-    y = preparar_objetivo(df, cfg["data"]["target"], cfg["data"]["clase_positiva"])
-    X_train, X_test, y_train, y_test = train_test_split(
-        df[variables], y,
-        test_size=cfg["division"]["test_size"],
-        random_state=cfg["division"]["random_state"],
-        stratify=y,
-    )
+    # Misma partición que usan la inferencia (lotes de prueba) y el drift (referencia = entrenamiento).
+    train, test = particionar(df, cfg)
+    y_train = preparar_objetivo(train, cfg["data"]["target"], cfg["data"]["clase_positiva"])
+    y_test = preparar_objetivo(test, cfg["data"]["target"], cfg["data"]["clase_positiva"])
+    X_train, X_test = train[variables], test[variables]
     print(f"Train: {len(X_train)} filas | Test: {len(X_test)} filas | % positivos test: {y_test.mean():.2%}")
     return X_train, X_test, y_train, y_test
 

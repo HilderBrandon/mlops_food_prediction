@@ -43,3 +43,7 @@ prefect_store/
 
 # Predicciones diarias de la pipeline de inferencia
 data/predictions/
+
+# Lotes puntuados y reportes de drift (actividad 3)
+data/lotes/
+data/reportes_drift/

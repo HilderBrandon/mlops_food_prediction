@@ -15,6 +15,7 @@ Proyecto del curso de **MLOps** de la **Maestría en Ciencia de Datos (Universid
 
 ```text
 mlops_food_prediction/
+├── .github/workflows/tests.yml  # CI: pytest en cada push y Pull Request (A3)
 ├── api/main.py                  # API de FastAPI que sirve el modelo champion (A2)
 ├── configs/
 │   ├── config.yaml              # Datos, candidatos, umbrales, MLflow, registro e inferencia
@@ -22,24 +23,33 @@ mlops_food_prediction/
 ├── data/
 │   ├── raw/                     # CSV de Kaggle (no se versiona)
 │   ├── processed/               # Datos transformados (no se versiona)
-│   └── predictions/             # Predicciones diarias prediccion_<fecha>.csv (no se versiona)
-├── docs/memoria-actividad-2.md  # Borrador de la memoria 2
+│   ├── predictions/             # Predicciones prediccion_<fecha-hora>.csv (no se versiona)
+│   ├── lotes/                   # Copia de cada lote puntuado, con etiquetas reales (A3, no se versiona)
+│   └── reportes_drift/          # Reportes HTML de Evidently y resúmenes JSON (A3, no se versiona)
+├── docs/
+│   ├── memoria-actividad-2.md   # Memoria 2
+│   └── memoria-actividad-3.md   # Memoria 3 (A3)
 ├── flows/
 │   ├── prueba_flow.py           # Flow de validación de Prefect + MLflow (A1)
 │   ├── food_flow.py             # Pipeline opcional de la A1
 │   ├── entrenamiento_flow.py    # Pipeline de entrenamiento (A2)
-│   ├── inferencia_flow.py       # Pipeline de inferencia diaria (A2)
-│   └── desplegar.py             # Despliegues en Prefect (A2)
+│   ├── inferencia_flow.py       # Pipeline de inferencia diaria, con drift emulado (A2 y A3)
+│   ├── drift_features_flow.py   # Drift de features con Evidently (A3)
+│   ├── drift_objetivo_flow.py   # Drift de evento: variable objetivo (A3)
+│   └── desplegar.py             # Despliegues en Prefect (A2 y A3)
 ├── models/                      # Modelos locales (no se versiona)
 ├── notebooks/01_eda.ipynb       # Análisis exploratorio
 ├── services/                    # docker compose de MLflow (5000) y Prefect (4200)
 ├── src/
 │   ├── load_data.py             # Cargue y validación del dataset
+│   ├── datos.py                 # Partición train/test compartida y validación de datos (A3)
+│   ├── drift.py                 # Emulación y detección de drift, sin Prefect ni MLflow (A3)
+│   ├── inferencia.py            # Lote de prueba, puntuación y nombres de archivo (A3)
 │   ├── modelo.py                # Variables, pipeline de sklearn, métricas y regla de promoción (A2)
 │   ├── preprocessing.py
 │   ├── train.py
 │   └── evaluate.py
-├── tests/                       # Pruebas con pytest
+├── tests/                       # Pruebas con pytest: datos, modelo, inferencia, API y drift
 ├── pyproject.toml
 └── poetry.lock
 ```
@@ -212,7 +222,7 @@ El mejor candidato fue `food-rf` (AUC 0.9194). Como no había champion previo, s
 poetry run python flows/inferencia_flow.py
 ```
 
-Flow `inferencia-food`: carga `models:/food-modelo@champion`, toma un lote aleatorio de `inferencia.tamano_lote` clientes, guarda `data/predictions/prediccion_<fecha>.csv` y crea un run con tag `fase = inferencia`, `modelo_version` y `modelo_run_id`.
+Flow `inferencia-food`: carga `models:/food-modelo@champion`, toma un lote aleatorio de `inferencia.tamano_lote` clientes, guarda `data/predictions/prediccion_<fecha>.csv` y crea un run con tag `fase = inferencia`, `modelo_version` y `modelo_run_id`. Desde la A3 el lote sale de la parte de prueba y lleva drift emulado (ver 8.2).
 
 ### 7.3 Despliegues en Prefect
 
@@ -243,19 +253,102 @@ $cliente = @{
     Age = 22; Gender = "Female"; "Marital Status" = "Single"; Occupation = "Student"
     "Monthly Income" = "No Income"; "Educational Qualifications" = "Graduate"; "Family size" = 4
     "Customer Type" = "Frequent"; latitude = 12.9766; longitude = 77.5993; "Pin code" = 560001
-    Feedback = "Positive"
 } | ConvertTo-Json
 Invoke-RestMethod -Uri http://localhost:8000/predict -Method Post -ContentType "application/json" -Body $cliente
 ```
 
-Respuesta obtenida con el champion versión 2:
+Desde la A3, `Feedback` es opcional: el modelo ya no la usa porque no existe en el momento de predecir (ver sección 8.1).
+
+Respuesta obtenida con el champion versión 2 de la A2 (que todavía usaba `Feedback`):
 
 ```json
 {"probabilidad_output": 0.9807, "prediccion": 1, "vuelve_a_pedir": "Yes", "version_modelo": "2"}
 ```
+
+## 8. Actividad 3: drift y tests
+
+### 8.0 Dependencias nuevas
+
+```powershell
+poetry add "evidently==0.7.22"
+poetry add --group dev httpx
+```
+
+Esto actualiza `pyproject.toml` y `poetry.lock`: se suben los dos. `httpx` lo necesita el `TestClient` de FastAPI.
+
+### 8.1 Cambio por la retroalimentación de la A2: sin `Feedback`
+
+`Feedback` es la opinión que el cliente deja **después** de pedir. En el momento de predecir si volverá a pedir no existe, así que usarla es fuga de información (*data leakage*) e infla el AUC.
+
+- `configs/features.yaml` tiene una lista `excluidas` con `Feedback`. Esas variables nunca entran en `ALL` ni en `NUMERIC`, y `CUSTOM` falla si alguna aparece en la lista (`tests/test_modelo.py` lo comprueba).
+- El modelo se registra con un nombre nuevo, `food-modelo-sin-feedback`. El champion anterior usaba `Feedback`, y su AUC no se puede comparar con el de un modelo sin esa variable.
+
+Antes de la inferencia hay que volver a entrenar:
+
+```powershell
+poetry run python flows/entrenamiento_flow.py
+```
+
+### 8.2 Drift emulado en la inferencia
+
+La inferencia ya no toma clientes al azar de todo el CSV. Ahora toma `inferencia.tamano_lote` filas de la **parte de prueba**: la misma partición del entrenamiento (`src/datos.py`), con clientes que el modelo no vio. Antes de predecir le aplica un drift controlado por `drift.nivel` en `configs/config.yaml`. El nivel no se pasa al ejecutar: se cambia en el YAML.
+
+| Qué cambia | Cómo (con nivel `n`) | Con 0.6 |
+|---|---|---|
+| `Age` | la media sube `n × 2` desviaciones estándar | +1,2 desviaciones (≈ +3,5 años) |
+| `Family size` | la media sube `n × 1` desviación estándar | +0,6 desviaciones (≈ +1 persona) |
+| `Occupation` | una fracción `n` de filas pasa a `Employee` | 60 % de las filas |
+| `Monthly Income` | una fracción `n` de filas pasa a `More than 50000` | 60 % de las filas |
+| `Output` (objetivo) | una fracción `n × 0,5` de los `Yes` pasa a `No` | 30 % de los `Yes` |
+
+El escenario es que empiezan a llegar clientes mayores, empleados y con más ingresos, y vuelven a pedir menos. Con `nivel: 0.0` el lote no cambia. `drift.semilla: 42` hace que los tres niveles usen los mismos 50 clientes, así que las diferencias vienen solo del drift.
+
+Cada ejecución guarda:
+
+- `data/lotes/lote_<fecha-hora>_nivel-<n>.csv`: el lote puntuado **con la etiqueta real** `Output`, para los pipelines de drift.
+- `data/predictions/prediccion_<fecha-hora>.csv`: las predicciones, **sin** la etiqueta, como en producción.
+
+Para correr los tres niveles se cambia `drift.nivel` y se ejecuta la inferencia cada vez:
+
+```powershell
+# drift.nivel: 0.0  ->  luego 0.3  ->  luego 0.6
+poetry run python flows/inferencia_flow.py
+```
+
+### 8.3 Pipelines de detección de drift
+
+Los dos comparan un lote (por defecto, el último de `data/lotes/`) con la **parte de entrenamiento**.
+
+```powershell
+poetry run python flows/drift_features_flow.py                                  # último lote
+poetry run python flows/drift_objetivo_flow.py data/lotes/lote_<...>_nivel-0.6.csv  # un lote concreto
+```
+
+| Pipeline | Qué compara | Prueba | Salida |
+|---|---|---|---|
+| `drift-features` | distribución de cada variable de entrada del modelo | Evidently `DataDriftPreset`: Kolmogorov-Smirnov (numéricas) y chi-cuadrado (categóricas), p < `drift.umbral_test` | `data/reportes_drift/<lote>_features.html` (reporte de Evidently) y `_features.json` |
+| `drift-objetivo` | tasa de `Output = Yes` | chi-cuadrado 2×2, p < `drift.alpha_objetivo` | `data/reportes_drift/<lote>_objetivo.json` |
+
+- **Alerta:** si la fracción de variables con drift **supera** `drift.umbral_fraccion` (0.3), el flow escribe un `WARNING` con `ALERTA de drift de features` en el log de Prefect y lo deja en su artefacto. El drift de evento alerta igual cuando el p-valor baja de `alpha_objetivo`.
+- **Lotes sin etiquetas:** en producción la etiqueta real llega días después. Si el lote no trae `Output`, o la trae vacía, `drift-objetivo` falla con el mensaje *"El lote no trae etiquetas reales…"*. Si faltan solo algunas, compara las disponibles y lo avisa en el log.
+- Cada ejecución crea un run en MLflow con `fase = drift-features` o `fase = drift-objetivo`, y con la fracción, las tasas, el p-valor y los reportes.
+- `desplegar.py` también registra `drift-features-diario` y `drift-objetivo-diario`, con cron `30 6 * * *` (30 minutos después de la inferencia).
 
 ## Pruebas
 
 ```powershell
 poetry run pytest
 ```
+
+No necesitan MLflow, Prefect ni el CSV: la lógica está en `src/` y la API se prueba con un modelo falso (`monkeypatch` sobre `cargar_champion`). Los tests que usan el CSV real se saltan si no está en `data/raw/`.
+
+| Archivo | Qué prueba |
+|---|---|
+| `tests/test_datos.py` | esquema, nulos, rangos, valores permitidos, partición reproducible y estratificada |
+| `tests/test_load_data.py` | cargue del CSV |
+| `tests/test_modelo.py` | selección de variables (incluida la exclusión de `Feedback`), los 4 modelos y la regla de promoción |
+| `tests/test_inferencia.py` | el lote sale solo de la parte de prueba, puntuación y nombres de archivo |
+| `tests/test_api.py` | `/health`, `/predict`, validación de entradas (422) y API sin modelo (503) |
+| `tests/test_drift.py` | emulación por nivel, lectura del resultado de Evidently, umbral y alerta, rechazo de lotes sin etiquetas, drift de evento y una prueba con Evidently real: 0.0 no alerta y 0.6 sí |
+
+**CI:** `.github/workflows/tests.yml` ejecuta `poetry run pytest` en GitHub Actions en cada push a `main` y en cada Pull Request.

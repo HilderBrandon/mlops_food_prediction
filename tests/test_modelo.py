@@ -53,3 +53,24 @@ def test_construir_modelo_entrena(tipo):
     modelo = construir_modelo(tipo, {}, ["Age"], ["Gender"]).fit(X, y)
     assert modelo.predict_proba(X).shape == (40, 2)
     assert list(modelo.feature_names_in_) == ["Age", "Gender"]
+
+
+def test_variables_excluidas_no_entran_en_all_ni_numeric():
+    cfg = {**FEATURES, "excluidas": ["Feedback"]}
+    _, num, cat = resolver_features({**cfg, "seleccion": "ALL"})
+    assert "Feedback" not in num + cat
+    assert cat == ["Gender"]
+
+
+def test_custom_con_variable_excluida_falla():
+    cfg = {**FEATURES, "excluidas": ["Feedback"], "seleccion": "CUSTOM", "custom": ["Age", "Feedback"]}
+    with pytest.raises(ValueError, match="no disponibles al predecir"):
+        resolver_features(cfg)
+
+
+def test_features_yaml_no_usa_feedback():
+    """Retroalimentación de la A2: Feedback se conoce después del pedido (fuga de información)."""
+    cfg = load_features()
+    assert "Feedback" in cfg["excluidas"]
+    _, num, cat = resolver_features(cfg)
+    assert "Feedback" not in num + cat
