@@ -2,8 +2,6 @@
 
 **Proyecto:** Online Food Ordering Behavior Prediction · **Integrantes:** Brandon Galvis, Johan Sebastian Cuellar · **Repositorio:** https://github.com/HilderBrandon/mlops_food_prediction
 
-> **Pendiente antes de entregar (borrar este recuadro):** las tablas de las secciones 6 y 7 tienen los valores de una réplica local del pipeline hecha con la copia pública del dataset, en la que `Customer Type` fue simulada. Hay que reemplazarlos por los de la ejecución propia (sección 8.2 del README) y añadir las capturas de la sección 6.
-
 ## 1. Objetivo
 
 Añadir monitoreo al sistema de la actividad 2. La inferencia ahora puntúa lotes de la parte de prueba con un drift emulado de nivel configurable. Dos pipelines de Prefect comparan cada lote con los datos de entrenamiento: uno revisa las variables de entrada con Evidently y el otro la variable objetivo. Además se completa la batería de tests de datos, modelo, inferencia, API y drift, y se ejecuta en GitHub Actions.
@@ -29,12 +27,12 @@ Para medir el efecto se entrenaron los cuatro candidatos con y sin `Feedback`, u
 
 | Candidato | AUC con Feedback | AUC sin Feedback |
 |---|---|---|
-| Regresión logística | 0,848 | 0,706 |
-| **Random forest** | **0,915** | **0,882** |
-| Gradient boosting | 0,914 | 0,861 |
-| SVM | 0,911 | 0,830 |
+| Regresión logística | 0,853 | 0,717 |
+| **Random forest** | **0,919** | **0,894** |
+| Gradient boosting | 0,895 | 0,864 |
+| SVM | 0,906 | 0,852 |
 
-El AUC baja en todos, sobre todo en los modelos lineales. El random forest sigue por encima del mínimo de 0,80. La cifra de la A2 era optimista: 0,88 es una estimación más honesta de lo que el modelo hará en producción.
+El AUC baja en todos. La regresión logística es la que más pierde (0,14), porque dependía casi solo de `Feedback`; el random forest pierde 0,03 y sigue por encima del mínimo de 0,80. La cifra de la A2 era optimista: 0,89 es una estimación más honesta de lo que el modelo hará en producción.
 
 ## 3. Descripción del trabajo
 
@@ -55,7 +53,7 @@ El nivel se fija en `drift.nivel` de `configs/config.yaml` y va de 0,0 a 1,0. No
 
 | Qué cambia | Regla (nivel `n`) | Con 0,3 | Con 0,6 |
 |---|---|---|---|
-| `Age` | la media sube `n × 2` desviaciones estándar | +0,6 desv. | +1,2 desv. (≈ +3,5 años) |
+| `Age` | la media sube `n × 2` desviaciones estándar | +0,6 desv. | +1,2 desv. (≈ +3,6 años) |
 | `Family size` | la media sube `n × 1` desviación estándar | +0,3 desv. | +0,6 desv. |
 | `Occupation` | una fracción `n` de las filas pasa a `Employee` | 30 % | 60 % |
 | `Monthly Income` | una fracción `n` de las filas pasa a `More than 50000` | 30 % | 60 % |
@@ -71,7 +69,7 @@ Las numéricas enteras se redondean después del desplazamiento. Con `drift.semi
 | Referencia del drift = parte de entrenamiento | Dataset completo | Es lo que el modelo vio. Si se usara el dataset completo, la parte de prueba se compararía consigo misma. |
 | KS para numéricas y chi-cuadrado para categóricas, p < 0,05 | Wasserstein, PSI | Con lotes de 50 filas las pruebas con p-valor tienen una lectura directa. Son las que Evidently elige por defecto con menos de 1.000 filas (para las binarias usaría la prueba z). Se dejan explícitas en el YAML para que el método no cambie si crece la referencia. |
 | Alerta si la fracción con drift **supera** 0,3 | Alertar por cualquier variable | Con 8 variables y α = 0,05, es esperable que alguna salga marcada por azar. Pedir más de 2 de 8 filtra esos falsos positivos. |
-| Chi-cuadrado 2×2 para el objetivo | Diferencia absoluta de tasas | Tiene en cuenta el tamaño del lote: con 50 filas, una tasa del 72 % frente al 77 % no es un cambio real. |
+| Chi-cuadrado 2×2 para el objetivo | Diferencia absoluta de tasas | Tiene en cuenta el tamaño del lote: con 50 filas, una tasa del 74 % frente al 78 % del entrenamiento no es un cambio real (p = 0,70). |
 | Rechazar lotes sin etiquetas, usar las parciales | Calcular con lo que haya | Sin etiquetas el resultado no tiene sentido. Con etiquetas parciales se compara lo disponible y se avisa en el log. |
 | La copia del lote lleva la etiqueta; las predicciones no | Un solo archivo | Así es en producción: la etiqueta llega días después y nunca debe llegar al modelo. |
 | Evidently se importa dentro de `calcular_drift_features` | Importarlo al inicio de `src/drift.py` | El resto de la lógica de drift se prueba sin Evidently. |
@@ -129,13 +127,13 @@ Lote de 50 clientes de la parte de prueba (`semilla` 42), comparado con las 291 
 
 | Nivel | Tasa predicha de `Yes` | Tasa real | Accuracy |
 |---|---|---|---|
-| 0,0 | 90 % | 74 % | 80 % |
-| 0,3 | 98 % | 62 % | 60 % |
-| 0,6 | 92 % | 52 % | 56 % |
+| 0,0 | 92 % | 74 % | 78 % |
+| 0,3 | 96 % | 62 % | 62 % |
+| 0,6 | 96 % | 52 % | 52 % |
 
 **Lectura.** Los reportes de 0,0 y 0,6 son claramente distintos y solo el de 0,6 supera el umbral, que es lo que pide la actividad. Con 0,3 el detector de features marca 2 de 8 variables y no alerta, pero el de evento sí detecta la caída de la tasa. Los dos detectores se complementan: el cambio en el comportamiento de los clientes aparece antes que el cambio en sus características.
 
-La última tabla muestra por qué hay que monitorear. Con drift, el modelo sigue prediciendo que casi todos vuelven a pedir (más del 90 %), mientras la tasa real cae al 52 % y la accuracy pasa del 80 % al 56 %. El modelo no lanza ningún error: simplemente se equivoca más. Sin estos pipelines, nadie lo notaría hasta revisar los resultados del negocio.
+La última tabla muestra por qué hay que monitorear. Con drift, el modelo sigue prediciendo que casi todos vuelven a pedir (96 %), mientras la tasa real cae al 52 % y la accuracy pasa del 78 % al 52 %. Con 0,3 y 0,6 la accuracy coincide con la tasa real de `Yes`: el modelo ya acierta poco más que si dijera "Yes" a todos. No lanza ningún error, simplemente se equivoca más. Sin estos pipelines, nadie lo notaría hasta revisar los resultados del negocio.
 
 ## 8. Tests
 
@@ -160,7 +158,7 @@ La última tabla muestra por qué hay que monitorear. Con drift, el modelo sigue
 
 Separar la lógica (`src/`) de la orquestación (`flows/`) permitió probar el drift, la inferencia y la API sin levantar servicios, y correr esos tests en GitHub Actions. La emulación muestra que el detector distingue un lote normal de uno con drift fuerte, y que el drift de evento detecta cambios que el de features no alcanza a marcar.
 
-La retroalimentación de la A2 llevó al cambio más importante: quitar `Feedback`. El AUC del champion baja de 0,92 a 0,88, pero ese número corresponde a lo que el modelo puede hacer de verdad.
+La retroalimentación de la A2 llevó al cambio más importante: quitar `Feedback`. El AUC del champion baja de 0,92 a 0,89, pero ese número corresponde a lo que el modelo puede hacer de verdad.
 
 Con más tiempo: que una alerta lance el reentrenamiento, ajustar el umbral con más lotes reales y avisar por un canal externo (correo o Slack) en lugar de solo el log.
 
@@ -173,11 +171,12 @@ Con más tiempo: que una alerta lance el reentrenamiento, ajustar el umbral con 
 - Explicar los conceptos de drift de features y de evento, y revisar la retroalimentación de la A2.
 - Escribir el código de `src/datos.py`, `src/inferencia.py`, `src/drift.py`, los dos flows de drift, los cambios de la inferencia y la API, los tests, el workflow de CI, la sección 8 del README y el borrador de esta memoria.
 - Verificar la lógica con una réplica local y elegir los parámetros de la emulación.
+- Con Claude Code: ejecutar el entrenamiento, los pipelines con los tres niveles y la comparación con y sin `Feedback`, actualizar las tablas de esta memoria con esos resultados y abrir el Pull Request.
 
 **Qué se hizo sin IA:**
 
-- La ejecución de los pipelines con los tres niveles, la revisión de los reportes de Evidently y la toma de capturas.
-- La gestión del repositorio: rama, commits, Pull Request y revisión de la ejecución del CI.
+- La revisión de los reportes de Evidently y de los resultados de cada nivel, y la toma de capturas.
+- La revisión del Pull Request y de la ejecución del CI.
 
 **Qué se revisó o corrigió:**
 
