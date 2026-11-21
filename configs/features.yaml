@@ -1,6 +1,6 @@
 # Variables del experimento. Cambia `seleccion` para elegir el conjunto:
-#   ALL     -> todas las variables, numéricas y categóricas
-#   NUMERIC -> solo las numéricas
+#   ALL     -> todas las variables disponibles, numéricas y categóricas
+#   NUMERIC -> solo las numéricas disponibles
 #   CUSTOM  -> solo las que aparecen en `custom` (nombres exactos del CSV)
 # Cada run registra en MLflow el alias (`features`) y el número de variables (`n_features`).
 
@@ -22,7 +22,14 @@ categoricas:
   - Customer Type
   - Feedback
 
-# Ejemplo: sin las variables de ubicación (latitude, longitude, Pin code).
+# Variables que NO existen cuando hay que predecir (actividad 3, retroalimentación de la A2).
+# Feedback es la opinión que el cliente deja después del pedido: usarla para predecir si
+# volverá a pedir es fuga de información (data leakage). Se quitan de ALL y NUMERIC, y
+# CUSTOM falla si alguna aparece en la lista.
+excluidas:
+  - Feedback
+
+# Sin las variables de ubicación (latitude, longitude, Pin code) ni Feedback.
 custom:
   - Age
   - Family size
@@ -32,4 +39,3 @@ custom:
   - Monthly Income
   - Educational Qualifications
   - Customer Type
-  - Feedback

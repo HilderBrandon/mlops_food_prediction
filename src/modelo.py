@@ -39,10 +39,14 @@ def load_features(path: Path = FEATURES_PATH) -> dict:
 
 
 def resolver_features(cfg_features: dict) -> tuple[str, list[str], list[str]]:
-    """Devuelve (alias, numericas, categoricas) según `seleccion` en features.yaml."""
+    """Devuelve (alias, numericas, categoricas) según `seleccion` en features.yaml.
+
+    Las variables de `excluidas` (no disponibles en el momento de predecir) nunca se usan.
+    """
     alias = str(cfg_features["seleccion"]).upper()
-    numericas = list(cfg_features["numericas"])
-    categoricas = list(cfg_features["categoricas"])
+    excluidas = set(cfg_features.get("excluidas") or [])
+    numericas = [v for v in cfg_features["numericas"] if v not in excluidas]
+    categoricas = [v for v in cfg_features["categoricas"] if v not in excluidas]
 
     if alias == "ALL":
         elegidas = numericas + categoricas
@@ -50,6 +54,9 @@ def resolver_features(cfg_features: dict) -> tuple[str, list[str], list[str]]:
         elegidas = numericas
     elif alias == "CUSTOM":
         elegidas = list(cfg_features.get("custom") or [])
+        prohibidas = [v for v in elegidas if v in excluidas]
+        if prohibidas:
+            raise ValueError(f"Variables no disponibles al predecir en 'custom': {prohibidas}")
         desconocidas = [v for v in elegidas if v not in numericas + categoricas]
         if desconocidas:
             raise ValueError(f"Variables desconocidas en 'custom': {desconocidas}")
